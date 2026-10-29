@@ -2,6 +2,7 @@ services:
   db:
     image: postgres:16-alpine
     container_name: prompt-studio-db
+    restart: unless-stopped        # ← 加这一行：除非你手动停它，否则 Docker 一启动它就跟着起
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
