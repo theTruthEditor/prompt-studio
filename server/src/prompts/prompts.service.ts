@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreatePromptDto } from './dto/create-prompt.dto';
 import { ListPromptsDto } from './dto/list-prompts.dto';
 
 @Injectable()
@@ -34,5 +35,28 @@ export class PromptsService {
     ]);
 
     return { items, total, page, pageSize };
+  }
+
+  async findOne(userId: number, id: number) {
+    // findFirst 而不是 findUnique：findUnique 只认唯一列（id），
+    // 我们要「id 匹配 且 userId 匹配」两个条件同时成立，只能 findFirst
+    const prompt = await this.prisma.prompt.findFirst({
+      where: { id, userId },
+    });
+    if (!prompt) {
+      // 「不存在」和「存在但不是你的」统一回 404——不透露资源是否真实存在（防枚举）
+      throw new NotFoundException('提示词不存在');
+    }
+    return prompt;
+  }
+
+  async create(userId: number, dto: CreatePromptDto) {
+    return this.prisma.prompt.create({
+      data: {
+        title: dto.title,
+        body: dto.body,
+        userId, // 归属人从 token 解冻出来，请求体里写了什么 userId 都不理
+      },
+    });
   }
 }
