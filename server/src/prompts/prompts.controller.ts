@@ -14,6 +14,7 @@ import {
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePromptDto } from './dto/create-prompt.dto';
+import { BindTagDto } from './dto/bind-tag.dto';
 import { ListPromptsDto } from './dto/list-prompts.dto';
 import { PromptsService } from './prompts.service';
 import { UpdatePromptDto } from './dto/update-prompt.dto';
@@ -53,6 +54,16 @@ export class PromptsController {
     @Body() dto: UpdatePromptDto,
   ) {
     return this.promptsService.update(user.id, id, dto);
+  }
+
+  // POST /api/prompts/:id/tags —— 给某条提示词打标签（R6：层级路径「谁的什么」）
+  @Post(':id/tags')
+  bindTag(
+    @CurrentUser() user: { id: number },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: BindTagDto,
+  ) {
+    return this.promptsService.bindTag(user.id, id, dto.name);
   }
 
   // DELETE /api/prompts/:id —— 成功回 204：办完了，没话要说（R5）

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,15 +30,21 @@ export class PromptsService {
 
     // 页面需要两个数：本页数据 items + 符合条件的总数 total（前端算总页数用）
     // Promise.all 把两个查询同时发出去并行跑，比一个跑完再跑下一个快
-    const [items, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.prompt.findMany({
         where,
         orderBy: { createdAt: 'desc' }, // 新建的排前面
         skip: (page - 1) * pageSize, // 跳过前几页攒下的条数
         take: pageSize, // 只拿这一页的条数
+        include: { tags: { include: { tag: true } } },
       }),
       this.prisma.prompt.count({ where }),
     ]);
+
+    const items = rows.map((row) => ({
+      ...row,
+      tags: row.tags.map((pt) => pt.tag), // 同款拍平：只给前端 tag 本体
+    }));
 
     return { items, total, page, pageSize };
   }
@@ -47,19 +54,23 @@ export class PromptsService {
   }
 
   /**
-   * 「存在且是你的」身份校验——查、改、删三条路都要过这道门，抽成私有方法复用。
+   * 「存在且是你的」身份校验——查、改、删、打标签都要过这道门，抽成私有方法复用。
    * findFirst 而不是 findUnique：findUnique 只认唯一列（id），
    * 我们要「id 匹配 且 userId 匹配」双条件同时成立。
    * 「不存在」和「存在但不是你的」统一回 404——不透露资源是否真实存在（防枚举）。
    */
   private async ensureOwned(userId: number, id: number) {
+    // include 嵌套：顺路把关联标签一起取回（经中间表 prompt_tags 到 tags 表）
     const prompt = await this.prisma.prompt.findFirst({
       where: { id, userId },
+      include: { tags: { include: { tag: true } } },
     });
     if (!prompt) {
       throw new NotFoundException('提示词不存在');
     }
-    return prompt;
+    // 拍平：中间表的行 { promptId, tagId, tag: {...} } → 直接的 [{ id, name }]
+    // 中间表是实现细节，不该泄漏给前端（API 形状设计）
+    return { ...prompt, tags: prompt.tags.map((pt) => pt.tag) };
   }
 
   async update(userId: number, id: number, dto: UpdatePromptDto) {
@@ -80,6 +91,30 @@ export class PromptsService {
     await this.ensureOwned(userId, id); // 先验身份，通过后才敢删
     await this.prisma.prompt.delete({ where: { id } });
     // 不 return 任何东西——204 的语义就是「办完了，没话要说」
+  }
+
+  async bindTag(userId: number, promptId: number, name: string) {
+    const prompt = await this.ensureOwned(userId, promptId); // 先确认这条提示词是你的
+    // 标签是公共资源（大家共用同一个「SQL」标签）：
+    // 不存在就建、存在就取——upsert 就是 findOrCreate
+    const tag = await this.prisma.tag.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+    const already = await this.prisma.promptTag.findFirst({
+      where: { promptId: prompt.id, tagId: tag.id },
+    });
+    if (already) {
+      // 重复绑定 = 冲突 → 409（REST 答卷 R6 的冲突码终于登场）
+      throw new ConflictException('该提示词已绑定此标签');
+    }
+    // 往中间表写一行关系——多对多的落库动作
+    await this.prisma.promptTag.create({
+      data: { promptId: prompt.id, tagId: tag.id },
+    });
+    // 重新查一遍：返回带新标签的完整提示词
+    return this.findOne(userId, promptId);
   }
 
   async create(userId: number, dto: CreatePromptDto) {
