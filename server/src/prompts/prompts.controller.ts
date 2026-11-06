@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePromptDto } from './dto/create-prompt.dto';
 import { BindTagDto } from './dto/bind-tag.dto';
 import { ListPromptsDto } from './dto/list-prompts.dto';
+import { SetFavoriteDto } from './dto/set-favorite.dto';
 import { PromptsService } from './prompts.service';
 import { UpdatePromptDto } from './dto/update-prompt.dto';
 
@@ -64,6 +66,16 @@ export class PromptsController {
     @Body() dto: BindTagDto,
   ) {
     return this.promptsService.bindTag(user.id, id, dto.name);
+  }
+
+  // PUT /api/prompts/:id/favorite —— 收藏设置（R8）：把子状态「覆盖成指定值」，幂等
+  @Put(':id/favorite')
+  setFavorite(
+    @CurrentUser() user: { id: number },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetFavoriteDto,
+  ) {
+    return this.promptsService.setFavorite(user.id, id, dto.value);
   }
 
   // DELETE /api/prompts/:id —— 成功回 204：办完了，没话要说（R5）

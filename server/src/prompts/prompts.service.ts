@@ -126,4 +126,14 @@ export class PromptsService {
       },
     });
   }
+
+  async setFavorite(userId: number, id: number, value: boolean) {
+    await this.ensureOwned(userId, id);
+    // 幂等的关键：写入「明确的目标值」，不是「取反」——
+    // 发 1 次和发 100 次结果相同，这就是 PUT 对世界的承诺
+    return this.prisma.prompt.update({
+      where: { id },
+      data: { isFavorite: value },
+    });
+  }
 }
