@@ -127,6 +127,12 @@ export class PromptsService {
     });
   }
 
+  // ↓↓↓ 同事的 PR：标签解绑
+  async unbindTag(userId: number, id: number, tagId: number) {
+    await this.prisma.promptTag.deleteMany({ where: { tagId } });
+    return { message: '解绑成功' };
+  }
+
   async setFavorite(userId: number, id: number, value: boolean) {
     await this.ensureOwned(userId, id);
     // 幂等的关键：写入「明确的目标值」，不是「取反」——

@@ -78,6 +78,16 @@ export class PromptsController {
     return this.promptsService.setFavorite(user.id, id, dto.value);
   }
 
+  // ↓↓↓ 同事的 PR：标签解绑（还没 review，别学它）
+  @Delete(':id/tags/:tagId')
+  unbindTag(
+    @CurrentUser() user: { id: number },
+    @Param('id') id: number,
+    @Param('tagId') tagId: number,
+  ) {
+    return this.promptsService.unbindTag(user.id, id, tagId);
+  }
+
   // DELETE /api/prompts/:id —— 成功回 204：办完了，没话要说（R5）
   @Delete(':id')
   @HttpCode(204)
