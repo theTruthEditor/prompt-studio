@@ -127,10 +127,17 @@ export class PromptsService {
     });
   }
 
-  // ↓↓↓ 同事的 PR：标签解绑
-  async unbindTag(userId: number, id: number, tagId: number) {
-    await this.prisma.promptTag.deleteMany({ where: { tagId } });
-    return { message: '解绑成功' };
+  /**
+   * 解绑：从提示词上摘掉一个标签（Step 3 · 修复后的正式版）
+   * 守门：先过「存在且是你的」——防水平越权（bug 1 的修复）
+   * 范围：deleteMany + 双条件（promptId+tagId），最多命中 1 行（bug 2 的修复）；
+   *      没绑过也静默成功（204 语义），不会炸 500——delete 单行版找不到行会抛 P2025
+   */
+  async unbindTag(userId: number, id: number, tagId: number): Promise<void> {
+    const prompt = await this.ensureOwned(userId, id);
+    await this.prisma.promptTag.deleteMany({
+      where: { promptId: prompt.id, tagId }, // 双条件把范围锁死：只可能命中 0 或 1 行
+    });
   }
 
   async setFavorite(userId: number, id: number, value: boolean) {

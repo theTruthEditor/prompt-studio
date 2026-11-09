@@ -78,14 +78,15 @@ export class PromptsController {
     return this.promptsService.setFavorite(user.id, id, dto.value);
   }
 
-  // ↓↓↓ 同事的 PR：标签解绑（还没 review，别学它）
+  // DELETE /api/prompts/:id/tags/:tagId —— 从提示词上摘掉一个标签（Step 3 修复后的正式版）
   @Delete(':id/tags/:tagId')
-  unbindTag(
+  @HttpCode(204)
+  async unbindTag(
     @CurrentUser() user: { id: number },
-    @Param('id') id: number,
-    @Param('tagId') tagId: number,
-  ) {
-    return this.promptsService.unbindTag(user.id, id, tagId);
+    @Param('id', ParseIntPipe) id: number,
+    @Param('tagId', ParseIntPipe) tagId: number,
+  ): Promise<void> {
+    await this.promptsService.unbindTag(user.id, id, tagId);
   }
 
   // DELETE /api/prompts/:id —— 成功回 204：办完了，没话要说（R5）
