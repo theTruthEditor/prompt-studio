@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { AiModule } from '../ai/ai.module';
 import { PromptsController } from './prompts.controller';
 import { PromptsService } from './prompts.service';
 
-// 注意 imports 里没有 PrismaModule——@Global 全局模块的效果再次生效
+// AiModule 提供 OptimizeService（放单员）；PrismaModule 依旧靠 @Global 全局生效
 @Module({
+  imports: [AiModule],
   controllers: [PromptsController],
   providers: [PromptsService],
 })

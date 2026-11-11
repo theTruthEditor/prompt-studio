@@ -20,11 +20,15 @@ import { ListPromptsDto } from './dto/list-prompts.dto';
 import { SetFavoriteDto } from './dto/set-favorite.dto';
 import { PromptsService } from './prompts.service';
 import { UpdatePromptDto } from './dto/update-prompt.dto';
+import { OptimizeService } from '../ai/optimize.service';
 
 @Controller('api/prompts')
 @UseGuards(JwtAuthGuard) // 挂验票员：写在类上 = 这个家族所有接口都要合法 token
 export class PromptsController {
-  constructor(private readonly promptsService: PromptsService) {}
+  constructor(
+    private readonly promptsService: PromptsService,
+    private readonly optimizeService: OptimizeService, // AI 优化放单员（ai 模块借调过来的）
+  ) {}
 
   // GET /api/prompts?page=1&pageSize=10&keyword=xxx
   @Get()
@@ -76,6 +80,15 @@ export class PromptsController {
     @Body() dto: SetFavoriteDto,
   ) {
     return this.promptsService.setFavorite(user.id, id, dto.value);
+  }
+
+  // POST /api/prompts/:id/optimize —— 提交 AI 优化任务：落账+入队，立刻返回单号（阶段 2 主菜）
+  @Post(':id/optimize')
+  requestOptimize(
+    @CurrentUser() user: { id: number },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.optimizeService.request(user.id, id);
   }
 
   // DELETE /api/prompts/:id/tags/:tagId —— 从提示词上摘掉一个标签（Step 3 修复后的正式版）
