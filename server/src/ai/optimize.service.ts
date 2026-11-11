@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -34,10 +35,29 @@ export class OptimizeService {
     if (active) {
       throw new ConflictException('该提示词已有进行中的优化任务');
     }
+    // 守门 3：每日限额——数一数 usage_logs 里"今天"已提交的 AI 调用次数
+    // （限额按"提交"计：提交即占额。真实产品也可按"成功"计，取决于定价策略）
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0); // 本地时区的今天零点
+    const used = await this.prisma.usageLog.count({
+      where: { userId, action: 'optimize', createdAt: { gte: startOfToday } },
+    });
+    const limit = Number(process.env.AI_DAILY_LIMIT ?? 20);
+    if (used >= limit) {
+      // 429 Too Many Requests：限流的标准状态码（HTTPException 泛用款，自定义状态码）
+      throw new HttpException(
+        `今日 AI 调用次数已达上限（${limit} 次），明天再来`,
+        429,
+      );
+    }
 
     // 1) 先在数据库落一行 queued 的任务记录（持久账本）
     const task = await this.prisma.aiTask.create({
       data: { userId, promptId, status: 'queued' },
+    });
+    // 1.5) 占额：写一条用量日志（限额的计数依据就是它）
+    await this.prisma.usageLog.create({
+      data: { userId, action: 'optimize' },
     });
     // 2) 再把单子放上 Redis 货架（消息里只带 taskId，body 由 worker 自己去库里取）
     const job = await this.optimizeQueue.add('optimize', { taskId: task.id });

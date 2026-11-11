@@ -9,9 +9,15 @@ import { OptimizationsController } from './optimizations.controller';
 @Module({
   imports: [
     // 第二条货架：optimize 专列（和 echo 互不干扰）
+    // defaultJobOptions：这趟货架上的单子默认失败自动重试 3 次，
+    // 间隔指数递增（2s → 4s → 8s），给下游服务喘息时间
     BullModule.registerQueue({
       name: 'optimize',
       connection: { host: 'localhost', port: 6379 },
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+      },
     }),
   ],
   controllers: [OptimizationsController],

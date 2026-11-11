@@ -19,6 +19,9 @@ export class OptimizeProcessor extends WorkerHost {
   }
 
   async process(job: Job<{ taskId: number }>): Promise<void> {
+    console.log(
+      `[optimize worker] 第 ${job.attemptsMade + 1} 次尝试：task #${job.data.taskId}`,
+    );
     const task = await this.prisma.aiTask.findUnique({
       where: { id: job.data.taskId },
       include: { prompt: true }, // 优化要用的原文在提示词表里，顺路取回
@@ -40,13 +43,16 @@ export class OptimizeProcessor extends WorkerHost {
         data: { status: 'done', result },
       });
     } catch (err) {
-      // 失败也落账：error 字段就是排障第一现场（Task 3 会让 BullMQ 自动重试）
+      // 失败也落账：error 字段就是排障第一现场
       // catch 出来的东西类型未知（any），用 instanceof 收窄出安全的 message
       const message = err instanceof Error ? err.message : String(err);
       await this.prisma.aiTask.update({
         where: { id: task.id },
         data: { status: 'failed', error: message },
       });
+      // 关键：把异常抛回给 BullMQ——它才会计一次失败尝试并触发自动重试；
+      // 不抛的话 job 会被当成"成功完成"，重试机制永远不启动
+      throw err;
     }
   }
 }
