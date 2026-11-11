@@ -18,5 +18,17 @@ services:
       timeout: 3s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: prompt-studio-redis
+    restart: unless-stopped          # 和数据库同款策略：Docker 一启动它就跟着起
+    ports:
+      - "6379:6379"                  # Redis 的默认端口（对应 PG 的 5432）
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]   # 活性检查：对 Redis 喊一声 ping，回 PONG 才算健康
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
 volumes:
   pgdata:
