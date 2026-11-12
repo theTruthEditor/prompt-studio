@@ -3,6 +3,7 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -22,5 +23,14 @@ export class OptimizationsController {
     @Param('taskId', ParseIntPipe) taskId: number,
   ) {
     return this.optimizeService.findOne(user.id, taskId);
+  }
+
+  // ↓↓↓ 同事小王的新 PR：把某次优化结果一键应用回提示词（还没 review）
+  @Post(':taskId/apply')
+  apply(
+    @CurrentUser() user: { id: number },
+    @Param('taskId', ParseIntPipe) taskId: number,
+  ) {
+    return this.optimizeService.apply(user.id, taskId);
   }
 }

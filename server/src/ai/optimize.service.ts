@@ -74,4 +74,14 @@ export class OptimizeService {
     }
     return task;
   }
+
+  // ↓↓↓ 同事小王的新 PR：把某次优化结果一键应用回提示词
+  async apply(userId: number, taskId: number) {
+    const task = await this.prisma.aiTask.findUnique({ where: { id: taskId } });
+    const prompt = await this.prisma.prompt.update({
+      where: { id: task!.promptId },
+      data: { body: task!.result! },
+    });
+    return prompt;
+  }
 }

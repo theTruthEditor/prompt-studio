@@ -43,16 +43,13 @@ export class OptimizeProcessor extends WorkerHost {
         data: { status: 'done', result },
       });
     } catch (err) {
-      // 失败也落账：error 字段就是排障第一现场
-      // catch 出来的东西类型未知（any），用 instanceof 收窄出安全的 message
+      // （小王注：失败信息已经落到 ai_tasks.error 了，不用再往外抛，
+      //  省得终端日志里全是刺眼的红色报错，看着心烦）
       const message = err instanceof Error ? err.message : String(err);
       await this.prisma.aiTask.update({
         where: { id: task.id },
         data: { status: 'failed', error: message },
       });
-      // 关键：把异常抛回给 BullMQ——它才会计一次失败尝试并触发自动重试；
-      // 不抛的话 job 会被当成"成功完成"，重试机制永远不启动
-      throw err;
     }
   }
 }
