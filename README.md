@@ -6,9 +6,11 @@
 
 ## 当前状态
 
-🚧 **阶段 0 · 地基进行中**（SQL / REST / Docker）——练习库已就绪，SQL 训练营开营。
+🚧 **阶段 3 · 上线运维进行中**（Docker 编排 / 云服务器 / Caddy HTTPS / GitHub Actions / 日志）——实施计划见 `docs` 仓库 plans/2026-11-13。
 
-完整路线共 5 个阶段（地基 → 认证+CRUD → 异步能力 → 上线运维 → 进阶+面试），目标约 10 周上线。
+✅ 阶段 0（SQL/REST/Docker 地基）、阶段 1（JWT 认证 + 提示词 CRUD）、阶段 2（Redis + BullMQ 异步 AI 优化 + 限额）已出师，学习记录见 `learn/stage0~2/`。
+
+完整路线共 5 个阶段（地基 → 认证+CRUD → 异步能力 → 上线运维 → 进阶+面试）。
 
 ## 技术栈
 
@@ -33,9 +35,10 @@ docker exec -it prompt-studio-db psql -U postgres -d prompt_studio   # 进入数
 ## 目录结构
 
 ```
+├── server/            # NestJS 后端（API + Prisma + BullMQ worker）
 ├── db/init/           # 数据库初始化脚本（schema + 种子数据）
-├── learn/             # 学习记录：练习、考核、复盘（阶段 0 起）
-├── docker-compose.yml # 本地开发环境
+├── learn/             # 学习记录：练习、考核、复盘（按阶段分目录）
+├── docker-compose.yml # 本地开发环境（PostgreSQL + Redis）
 └── .nvmrc             # Node 版本声明
 ```
 
