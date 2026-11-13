@@ -50,6 +50,8 @@ export class OptimizeProcessor extends WorkerHost {
         where: { id: task.id },
         data: { status: 'failed', error: message },
       });
+      // 需要抛出异常，bullmq才能捕获，时机到了进行重试
+      throw err;
     }
   }
 }

@@ -77,10 +77,22 @@ export class OptimizeService {
 
   // ↓↓↓ 同事小王的新 PR：把某次优化结果一键应用回提示词
   async apply(userId: number, taskId: number) {
-    const task = await this.prisma.aiTask.findUnique({ where: { id: taskId } });
+    // 只过滤了taskid，没有验证userid是否属于自己的，是否数据也有多行？需要只取第一行
+    const task = await this.prisma.aiTask.findFirst({
+      where: { id: taskId, userId },
+    });
+    if (!task) {
+      throw new NotFoundException('该任务不存在记录或不属于该用户');
+    }
+    // 判断任务的状态是否完成了
+    // 状态守门顺带排除 result 为 null 的可能——TS 窄化之后，
+    // 下面用 task.result 不需要任何 `!` 断言（eslint 和 tsc 同时满意）
+    if (task.status !== 'done' || task.result === null) {
+      throw new NotFoundException('任务未完成，无结果可应用');
+    }
     const prompt = await this.prisma.prompt.update({
-      where: { id: task!.promptId },
-      data: { body: task!.result! },
+      where: { id: task.promptId },
+      data: { body: task.result },
     });
     return prompt;
   }
