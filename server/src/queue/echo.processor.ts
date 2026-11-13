@@ -8,10 +8,15 @@ import IORedis from 'ioredis';
  * 不用人喊——有单就干，没单就蹲着等。
  */
 @Injectable()
-@Processor('echo', { connection: { host: 'localhost', port: 6379 } })
+@Processor('echo', {
+  connection: { host: process.env.REDIS_HOST ?? 'localhost', port: 6379 },
+})
 export class EchoProcessor extends WorkerHost {
   // 干完活把结果写回货架的传送带（独立于队列的 Redis 连接）
-  private readonly redis = new IORedis({ host: 'localhost', port: 6379 });
+  private readonly redis = new IORedis({
+    host: process.env.REDIS_HOST ?? 'localhost',
+    port: 6379,
+  });
 
   async process(job: Job<{ message: string }>): Promise<string> {
     // 干活现场：每来一单，这个方法执行一次

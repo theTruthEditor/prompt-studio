@@ -1,0 +1,16 @@
+{$DOMAIN} {
+	encode gzip
+
+	# API 请求整体转交 NestJS——注意保留 /api 前缀不剥掉：
+	# Nest 的全局路由前缀就是 api，剥了反而 404
+	handle /api/* {
+		reverse_proxy app:3000
+	}
+
+	# 其余请求：托管静态落地页（找不到的路径兜底回 index.html）
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}

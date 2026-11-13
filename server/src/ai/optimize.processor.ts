@@ -9,7 +9,9 @@ import { AiService } from './ai.service';
  * 状态机：queued →（接单）running →（成功）done /（失败）failed
  */
 @Injectable()
-@Processor('optimize', { connection: { host: 'localhost', port: 6379 } })
+@Processor('optimize', {
+  connection: { host: process.env.REDIS_HOST ?? 'localhost', port: 6379 },
+})
 export class OptimizeProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
@@ -43,8 +45,8 @@ export class OptimizeProcessor extends WorkerHost {
         data: { status: 'done', result },
       });
     } catch (err) {
-      // （小王注：失败信息已经落到 ai_tasks.error 了，不用再往外抛，
-      //  省得终端日志里全是刺眼的红色报错，看着心烦）
+      // 失败信息落到 ai_tasks.error（户口本）之外，还必须往外抛——
+      // BullMQ 只有接到抛出的异常才会计一次失败、到点触发重试
       const message = err instanceof Error ? err.message : String(err);
       await this.prisma.aiTask.update({
         where: { id: task.id },

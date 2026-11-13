@@ -13,7 +13,7 @@ import { OptimizationsController } from './optimizations.controller';
     // 间隔指数递增（2s → 4s → 8s），给下游服务喘息时间
     BullModule.registerQueue({
       name: 'optimize',
-      connection: { host: 'localhost', port: 6379 },
+      connection: { host: process.env.REDIS_HOST ?? 'localhost', port: 6379 },
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },

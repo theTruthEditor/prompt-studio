@@ -1,0 +1,71 @@
+# 生产/彩排编排：app 由源码构建，caddy 做大门（HTTPS + 静态落地页）
+# 用法：docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# 与 docker-compose.yml（本地开发）的关键差异（彩排前先费曼一遍）：
+# 1. db/redis 不映射任何公网端口——只有 compose 内网里的 app 够得着
+# 2. app 不映射端口——它躲在 caddy 后面，公网流量只走 80/443
+# 3. 数据卷独立命名（pgdata_prod），和开发库互不污染
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: prompt-studio-db-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: prompt-studio-redis-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: ./server
+    container_name: prompt-studio-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy   # 等数据库健康了再启动（连不上会白启动）
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      REDIS_HOST: redis   # 容器内网里 Redis 的名字就叫 redis——这就是 Task 0 改 REDIS_HOST 的原因
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      AI_DAILY_LIMIT: ${AI_DAILY_LIMIT}
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: prompt-studio-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP（Caddy 会自动把访问重定向到 HTTPS）
+      - "443:443"     # HTTPS
+    environment:
+      DOMAIN: ${DOMAIN}   # 传给 Caddyfile 里的 {$DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro          # 静态落地页
+      - caddy_data:/data           # 证书落盘：容器重建不用重新签发
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata_prod:
+  caddy_data:
+  caddy_config:
