@@ -39,4 +39,8 @@ COPY --from=build /app/dist ./dist
 EXPOSE 3000
 
 # 启动前先把没跑过的数据库迁移补齐（migrate deploy 幂等，重复执行无害）
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+# 入口是 dist/src/main.js 而非 dist/main.js：tsconfig 没写死 rootDir 时，
+# tsc 按"所有输入文件的公共父目录"推导编译根——本项目的代码横跨 src/ 和
+# prisma/ 两个目录，产物因此多套一层 src/（本地 watch 模式永远发现不了，
+# 彩排第一次裸跑生产命令才炸出来）
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
