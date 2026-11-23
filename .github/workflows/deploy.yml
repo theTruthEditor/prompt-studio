@@ -1,0 +1,21 @@
+# 自动部署流水线：push 到 main → VM 上的自托管 runner 执行
+# 为什么 runner 装在 VM 里：GitHub 云端的 runner 够不着家里 NAT 后面的 VM；
+# 而装在 VM 里的 runner 是"出站轮询"——它主动找 GitHub 领活，
+# 不需要任何人能连进这台机器（不占任何入站端口）
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    # self-hosted = 只在装了我们 runner 的机器上执行
+    runs-on: [self-hosted]
+    steps:
+      - name: 拉代码并重建整套栈
+        run: |
+          cd ~/prompt-studio
+          git pull
+          docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+          docker image prune -f
