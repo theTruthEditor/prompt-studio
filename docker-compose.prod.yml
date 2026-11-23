@@ -44,7 +44,7 @@ services:
     environment:
       NODE_ENV: production
       REDIS_HOST: redis   # 容器内网里 Redis 的名字就叫 redis——这就是 Task 0 改 REDIS_HOST 的原因
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${DB_PASSWORD}@db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       AI_DAILY_LIMIT: ${AI_DAILY_LIMIT}
 
