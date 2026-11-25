@@ -83,8 +83,57 @@ export class PromptsService {
       // 不拦的话就是一次"无变化更新"——200 却什么都没改，接口语义撒谎
       throw new BadRequestException('至少要提供一个要修改的字段');
     }
-    await this.ensureOwned(userId, id); // 先验身份，通过后才敢改
+    const prompt = await this.ensureOwned(userId, id); // 先验身份，通过后才敢改
+    // 版本历史（模块 3）：body 真的要变时，先把「旧内容」存一条快照——
+    // 改错还有得后悔。只改标题/收藏这类不动正文的操作不产生快照，
+    // 「改成同一个内容」也不算变——避免快照表被无意义的行撑爆
+    if (dto.body !== undefined && dto.body !== prompt.body) {
+      await this.prisma.promptSnapshot.create({
+        data: { promptId: prompt.id, body: prompt.body, source: 'edit' },
+      });
+    }
     return this.prisma.prompt.update({ where: { id }, data: dto });
+  }
+
+  /**
+   * 快照列表：最新在前，最多 50 条——版本历史是「后悔药」，不是永久档案馆
+   */
+  async listSnapshots(userId: number, id: number) {
+    const prompt = await this.ensureOwned(userId, id);
+    return this.prisma.promptSnapshot.findMany({
+      where: { promptId: prompt.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+  }
+
+  /**
+   * 回滚：把指定快照的 body 写回提示词。两个设计点：
+   * 1. 回滚前先把「当前内容」也存一条快照（source: restore）——
+   *    回滚本身也走「先存旧、再改新」的规矩，所以回滚永远可以再回滚（可逆）
+   * 2. 快照必须属于这条提示词（findFirst 双条件）——
+   *    拿别的提示词/别人的快照 id 来回滚，统一 404，防水平越权（老规矩）
+   */
+  async restoreSnapshot(userId: number, id: number, snapshotId: number) {
+    const prompt = await this.ensureOwned(userId, id);
+    const snapshot = await this.prisma.promptSnapshot.findFirst({
+      where: { id: snapshotId, promptId: prompt.id },
+    });
+    if (!snapshot) {
+      throw new NotFoundException('快照不存在或不属于该提示词');
+    }
+    if (snapshot.body === prompt.body) {
+      // 快照内容和当前一模一样 = 回滚是空操作 → 400 拒绝「撒谎的成功」
+      //（同 update 的空补丁 400：不让接口返回一个什么都没改的 200）
+      throw new BadRequestException('快照内容与当前内容相同，无需回滚');
+    }
+    await this.prisma.promptSnapshot.create({
+      data: { promptId: prompt.id, body: prompt.body, source: 'restore' },
+    });
+    return this.prisma.prompt.update({
+      where: { id: prompt.id },
+      data: { body: snapshot.body },
+    });
   }
 
   async remove(userId: number, id: number): Promise<void> {

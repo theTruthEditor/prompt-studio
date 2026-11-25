@@ -91,6 +91,25 @@ export class PromptsController {
     return this.optimizeService.request(user.id, id);
   }
 
+  // GET /api/prompts/:id/snapshots —— 版本历史列表（最新在前，模块 3）
+  @Get(':id/snapshots')
+  listSnapshots(
+    @CurrentUser() user: { id: number },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.promptsService.listSnapshots(user.id, id);
+  }
+
+  // POST /api/prompts/:id/snapshots/:snapshotId/restore —— 回滚到指定快照（模块 3）
+  @Post(':id/snapshots/:snapshotId/restore')
+  restoreSnapshot(
+    @CurrentUser() user: { id: number },
+    @Param('id', ParseIntPipe) id: number,
+    @Param('snapshotId', ParseIntPipe) snapshotId: number,
+  ) {
+    return this.promptsService.restoreSnapshot(user.id, id, snapshotId);
+  }
+
   // DELETE /api/prompts/:id/tags/:tagId —— 从提示词上摘掉一个标签（Step 3 修复后的正式版）
   @Delete(':id/tags/:tagId')
   @HttpCode(204)

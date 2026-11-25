@@ -25,17 +25,31 @@ model User {
 }
 
 model Prompt {
-  id         Int         @id @default(autoincrement())
-  userId     Int         @map("user_id")
-  title      String      @db.VarChar(200)
-  body       String
-  isFavorite Boolean     @default(false) @map("is_favorite")
-  createdAt  DateTime    @default(now()) @map("created_at")
-  user       User        @relation(fields: [userId], references: [id])
-  tags       PromptTag[]
-  aiTasks    AiTask[]
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  title     String           @db.VarChar(200)
+  body      String
+  isFavorite Boolean         @default(false) @map("is_favorite")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id])
+  tags      PromptTag[]
+  aiTasks   AiTask[]
+  snapshots PromptSnapshot[] // 版本历史：这条提示词的所有快照（模块 3）
   @@index([userId])
   @@map("prompts")
+}
+
+// 版本历史：提示词每次修改/回滚前的全量正文快照（模块 3）
+// 全量存 body 而不是 diff——v1 选"简单可靠可回滚"，diff 是二期优化
+model PromptSnapshot {
+  id        Int      @id @default(autoincrement())
+  promptId  Int      @map("prompt_id")
+  body      String   @db.Text
+  source    String   @default("edit") // edit = 修改前自动存 / restore = 回滚前自动存
+  createdAt DateTime @default(now()) @map("created_at")
+  prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade) // 提示词删了，历史跟着删
+  @@index([promptId])
+  @@map("prompt_snapshots")
 }
 
 model Tag {
