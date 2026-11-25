@@ -47,7 +47,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${DB_PASSWORD}@db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       AI_DAILY_LIMIT: ${AI_DAILY_LIMIT}
-     healthcheck:
+    healthcheck:
+      # 401 = 网关和守卫链路活着的信号（未登录时的正常拒绝）；
+      # 连不上或返回别的状态都算不健康，连续 3 次不健康 compose 标记 unhealthy
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/prompts 2>&1 | grep -q 401"]
       interval: 10s
       timeout: 5s
