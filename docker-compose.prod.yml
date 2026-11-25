@@ -47,6 +47,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${DB_PASSWORD}@db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
       AI_DAILY_LIMIT: ${AI_DAILY_LIMIT}
+     healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/prompts 2>&1 | grep -q 401"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   caddy:
     image: caddy:2-alpine
