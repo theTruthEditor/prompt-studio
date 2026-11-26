@@ -177,6 +177,130 @@ export class PromptsService {
   }
 
   /**
+   * 导出：把当前用户全部提示词导出为 json 或 md 文件。
+   * 返回 { 内容, 文件名, 类型 } 三件套，文件头（Content-Disposition）由 controller 设置。
+   * json 是给机器回导的（结构化、可解析）；md 是给人看的（可读性优先）——两种受众两种格式
+   */
+  async exportAll(userId: number, format: 'json' | 'md') {
+    const prompts = await this.prisma.prompt.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: { tags: { include: { tag: true } } },
+    });
+    const date = new Date().toISOString().slice(0, 10);
+
+    if (format === 'md') {
+      const lines = [
+        '# Prompt Studio 导出',
+        '',
+        `> 导出时间：${date}　共 ${prompts.length} 条`,
+        '',
+      ];
+      prompts.forEach((p, i) => {
+        const tags = p.tags.map((pt) => pt.tag.name).join('、') || '无';
+        lines.push(`## ${i + 1}. ${p.title}`);
+        lines.push(`- 标签：${tags}　收藏：${p.isFavorite ? '是' : '否'}`);
+        lines.push('');
+        lines.push(p.body);
+        lines.push('');
+      });
+      return {
+        content: lines.join('\n'),
+        filename: `prompts-${date}.md`,
+        contentType: 'text/markdown; charset=utf-8',
+      };
+    }
+
+    const data = prompts.map((p) => ({
+      title: p.title,
+      body: p.body,
+      isFavorite: p.isFavorite,
+      tags: p.tags.map((pt) => pt.tag.name),
+      createdAt: p.createdAt,
+    }));
+    return {
+      content: JSON.stringify(data, null, 2),
+      filename: `prompts-${date}.json`,
+      contentType: 'application/json; charset=utf-8',
+    };
+  }
+
+  /**
+   * 导入：解析上传的 JSON 文件批量入库。
+   * 设计点：
+   * 1. 【部分成功语义】坏行跳过、好行入库、最后交报告——不搞"一行坏全部回滚"：
+   *    批量导入 300 条挂 1 条，全回滚等于让用户改完再传一次，体验是灾难
+   * 2. 上限 500 条：防止一个巨型文件把数据库当靶子打（limits 要有）
+   * 3. 标签走 connectOrCreate：和 bindTag 同款逻辑，不存在就建、存在就共用
+   * 4. 不去重：同名提示词导入两次就存两份（v1 明确不做去重，重复是用户自己的选择）
+   */
+  async importJson(userId: number, file: Express.Multer.File) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('请上传文件（字段名 file，内容为导出的 JSON）');
+    }
+    let rows: unknown;
+    try {
+      rows = JSON.parse(file.buffer.toString('utf-8'));
+    } catch {
+      throw new BadRequestException('文件内容不是合法的 JSON');
+    }
+    if (!Array.isArray(rows)) {
+      throw new BadRequestException('JSON 顶层必须是数组（请使用导出的 json 格式文件）');
+    }
+    if (rows.length === 0) {
+      throw new BadRequestException('文件里没有任何数据');
+    }
+    if (rows.length > 500) {
+      throw new BadRequestException('单次最多导入 500 条');
+    }
+
+    const report = {
+      created: 0,
+      skipped: 0,
+      errors: [] as { row: number; message: string }[],
+    };
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] as Record<string, unknown>;
+      const title = typeof row.title === 'string' ? row.title.trim() : '';
+      const body = typeof row.body === 'string' ? row.body.trim() : '';
+      if (!title || !body) {
+        report.errors.push({ row: i + 1, message: 'title 或 body 缺失/不是字符串' });
+        continue;
+      }
+      if (title.length > 200) {
+        report.errors.push({ row: i + 1, message: 'title 超过 200 字上限' });
+        continue;
+      }
+      const tags = Array.isArray(row.tags)
+        ? (row.tags as unknown[]).filter(
+            (t): t is string => typeof t === 'string' && t.trim().length > 0,
+          )
+        : [];
+      await this.prisma.prompt.create({
+        data: {
+          title,
+          body,
+          userId,
+          ...(tags.length > 0 && {
+            tags: {
+              create: tags.map((name) => ({
+                tag: {
+                  connectOrCreate: {
+                    where: { name },
+                    create: { name },
+                  },
+                },
+              })),
+            },
+          }),
+        },
+      });
+      report.created++;
+    }
+    return report;
+  }
+
+  /**
    * 解绑：从提示词上摘掉一个标签（Step 3 · 修复后的正式版）
    * 守门：先过「存在且是你的」——防水平越权（bug 1 的修复）
    * 范围：deleteMany + 双条件（promptId+tagId），最多命中 1 行（bug 2 的修复）；

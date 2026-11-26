@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  DefaultValuePipe,
   Delete,
   Get,
   HttpCode,
@@ -10,8 +11,15 @@ import {
   Post,
   Put,
   Query,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+// 【import type 铁律】isolatedModules + emitDecoratorMetadata 开着时，
+// 只当类型用的东西必须 import type——值导入会让装饰器元数据生成报错
+import type { Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreatePromptDto } from './dto/create-prompt.dto';
@@ -35,6 +43,36 @@ export class PromptsController {
   findAll(@CurrentUser() user: { id: number }, @Query() dto: ListPromptsDto) {
     // user 就是 jwt.strategy validate() 的返回值——从 token 里解冻出来的那个人
     return this.promptsService.findAll(user.id, dto);
+  }
+
+  // GET /api/prompts/export?format=json|md —— 导出文件下载（模块 5）
+  // 【路由顺序铁律】必须注册在 @Get(':id') 之前：Express 按注册顺序匹配，
+  // 放后面的话 "export" 会先命中 :id 被 ParseIntPipe 打回 400——接口永远到不了
+  @Get('export')
+  async exportAll(
+    @CurrentUser() user: { id: number },
+    @Query('format', new DefaultValuePipe('json')) format: 'json' | 'md',
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { content, filename, contentType } = await this.promptsService.exportAll(
+      user.id,
+      format === 'md' ? 'md' : 'json',
+    );
+    // passthrough 模式：只借 res 设置文件下载头，响应体仍走 Nest 的返回值通道
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return content;
+  }
+
+  // POST /api/prompts/import —— 上传导出的 JSON 批量入库（模块 5）
+  // FileInterceptor 用 multer 接住 multipart 表单里的文件，存内存（file.buffer）
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  importJson(
+    @CurrentUser() user: { id: number },
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.promptsService.importJson(user.id, file);
   }
 
   // GET /api/prompts/5 —— 路径参数；ParseIntPipe 把 "5" 转成数字 5，"abc" 直接 400
