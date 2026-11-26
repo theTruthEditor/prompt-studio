@@ -16,6 +16,17 @@ jobs:
       - name: 拉代码并重建整套栈
         run: |
           cd ~/prompt-studio
-          git pull
+          # 家里到 GitHub 的链路间歇抽风（TLS 握手被掐），最多重试 5 次，每次退避 15 秒
+          pulled=""
+          for i in 1 2 3 4 5; do
+            if git pull; then pulled=yes; break; fi
+            echo "第 $i 次 git pull 失败，15 秒后重试……"
+            sleep 15
+          done
+          # 兜底哨兵：5 次全挂就大声失败——绝不拿着旧代码装成部署成功（绿勾≠健康）
+          if [ -z "$pulled" ]; then
+            echo "::error::git pull 重试 5 次全失败，本次部署终止"
+            exit 1
+          fi
           docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
           docker image prune -f
